@@ -5,6 +5,7 @@ import akka.NotUsed;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.stream.javadsl.Flow;
+import akka.stream.javadsl.Keep;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 
@@ -27,7 +28,25 @@ public class ExploringMaterializedValues {
                 .filter(x -> x % 2 == 0);
 
         Sink<Integer, CompletionStage<Done>> sink = Sink.foreach(System.out::println);
+        Sink<Integer, CompletionStage<Integer>> sinkWithCounter = Sink.fold(0,
+                (counter, value) -> {
+                    System.out.println(value);
+                    return counter + 1;
+                });
 
-        source.via(greaterThan200).via(evenNumberFilter).to(sink).run(actorSystem);
+//        source.via(greaterThan200).via(evenNumberFilter).to(sink).run(actorSystem);
+        CompletionStage<Integer> result = source
+                .via(greaterThan200)
+                .via(evenNumberFilter)
+                .toMat(sinkWithCounter, Keep.right())
+                .run(actorSystem);
+
+        result.whenComplete((value, throwable) -> {
+            if(throwable == null) {
+                System.out.println("The graph`smaterialized value is: " + value);
+            } else {
+                System.out.println("Something went wrong: " + throwable.getMessage());
+            }
+        });
     }
 }
